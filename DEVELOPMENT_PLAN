@@ -1,0 +1,97 @@
+# AI Car Game – Development Plan
+
+Goal:
+Build a 2D car racing environment for reinforcement learning.
+
+The system will start as a playable pygame game and evolve into a gym-style RL environment.
+
+---
+
+# Milestone 1 – Playable Game
+
+Files:
+- track.py
+- car.py
+- main.py
+
+Features:
+- Load track image
+- White = road, black = wall
+- Car rectangle that moves with WASD
+- Basic physics (speed, steering)
+- Collision with walls
+- Window renders track and car
+
+Definition of done:
+Running `python main.py` allows the user to drive the car around.
+
+---
+
+# Milestone 2 – Sensors
+
+Add ray sensors to detect distance to walls.
+
+Files modified:
+- track.py
+- car.py
+- main.py
+
+Features:
+- Raycast function
+- 7 sensors in front of car
+- Debug visualization of rays
+
+Definition of done:
+Sensors return normalized distance values.
+
+---
+
+# Milestone 3 – Laps
+
+Files:
+- lap.py
+
+Features:
+- Start line
+- Checkpoints
+- Lap counter
+
+Definition of done:
+Car completes laps only if checkpoints are crossed in correct order.
+
+---
+
+# Milestone 4 – RL Environment
+
+Files:
+- env.py
+
+Features:
+- reset()
+- step(action)
+- observation vector
+- reward system
+
+Definition of done:
+Agent can interact with the environment without rendering.
+
+---
+
+# Milestone 5 – Training
+
+Files:
+- train.py
+
+Features:
+- connect to stable-baselines3
+- train PPO agent
+- save trained model
+
+---
+
+# General Rules
+
+Keep code modular.
+Do not merge logic into large files.
+Use simple arcade physics.
+Prioritize performance for headless training.
