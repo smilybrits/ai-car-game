@@ -8,20 +8,22 @@ class Car:
     def __init__(self, x: float, y: float) -> None:
         self.x = x
         self.y = y
-        self.angle = 0.0
+        self.angle = 75
         self.speed = 0.0
 
         # Tuned for smooth, predictable Milestone 1 movement.
-        self.forward_acceleration = 0.14
+        self.forward_acceleration = 0.01
         self.reverse_acceleration = 0.05
         self.brake_deceleration = 0.10
-        self.friction = 0.08
+        self.friction = 0.02
         self.rotation_speed = 0.05
-        self.max_forward_speed = 9
+        self.max_forward_speed = 7
         self.max_reverse_speed = -2.5
         self.turn_min_speed = 0.05
+        self.collision_bump_distance = 4.0
+        self.collision_speed_factor = 0.3
 
-    def update(self) -> None:
+    def update(self, track) -> None:
         """Update speed, heading, and position from keyboard input."""
         keys = pygame.key.get_pressed()
 
@@ -50,13 +52,71 @@ class Car:
 
         # Keep steering stable: reduced turning response when almost stopped.
         turn_multiplier = 1.0 if abs(self.speed) >= self.turn_min_speed else 0.35
+        proposed_angle = self.angle
         if keys[pygame.K_LEFT]:
-            self.angle -= self.rotation_speed * turn_multiplier
+            proposed_angle -= self.rotation_speed * turn_multiplier
         if keys[pygame.K_RIGHT]:
-            self.angle += self.rotation_speed * turn_multiplier
+            proposed_angle += self.rotation_speed * turn_multiplier
 
-        self.x += math.cos(self.angle) * self.speed
-        self.y += math.sin(self.angle) * self.speed
+        # Rotation check: only apply angle if rotated footprint stays on road.
+        if self._is_footprint_on_road(track, self.x, self.y, proposed_angle):
+            self.angle = proposed_angle
+
+        next_x = self.x + math.cos(self.angle) * self.speed
+        next_y = self.y + math.sin(self.angle) * self.speed
+
+        can_move = self._is_footprint_on_road(track, next_x, next_y, self.angle)
+
+        if can_move:
+            self.x = next_x
+            self.y = next_y
+        else:
+            move_dx = next_x - self.x
+            move_dy = next_y - self.y
+            move_length = math.hypot(move_dx, move_dy)
+
+            if move_length > 0.0:
+                bump_x = self.x - (move_dx / move_length) * self.collision_bump_distance
+                bump_y = self.y - (move_dy / move_length) * self.collision_bump_distance
+                can_bump = self._is_footprint_on_road(track, bump_x, bump_y, self.angle)
+
+                if can_bump:
+                    self.x = bump_x
+                    self.y = bump_y
+
+            self.speed *= self.collision_speed_factor
+
+            if abs(self.speed) < 0.01:
+                self.speed = 0.0
+
+    def _is_footprint_on_road(self, track, center_x: float, center_y: float, angle: float) -> bool:
+        """Return True only when all collision points are on drivable track."""
+        collision_points = self._get_collision_points(center_x, center_y, angle)
+        return all(track.is_road(point_x, point_y) for point_x, point_y in collision_points)
+
+    def _get_collision_points(self, center_x: float, center_y: float, angle: float) -> list[tuple[float, float]]:
+        """Return rotated footprint points used for track-mask collision checks."""
+        # Front/rear points plus side points give better edge and corner blocking.
+        local_points = [
+            (12.0, 0.0),   # front tip
+            (7.0, -4.5),   # front-left
+            (7.0, 4.5),    # front-right
+            (0.0, -6.0),   # mid-left
+            (0.0, 6.0),    # mid-right
+            (-8.0, -7.0),  # rear-left
+            (-8.0, 7.0),   # rear-right
+        ]
+
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        world_points: list[tuple[float, float]] = []
+
+        for local_x, local_y in local_points:
+            world_x = center_x + (local_x * cos_a - local_y * sin_a)
+            world_y = center_y + (local_x * sin_a + local_y * cos_a)
+            world_points.append((world_x, world_y))
+
+        return world_points
 
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the car as a rotated triangle with a clear front point."""

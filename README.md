@@ -11,6 +11,10 @@ Machine learning car racing simulator built in Python using Pygame.
 - Milestone 1 now includes a playable moving car.
 - Updated car visuals to a direction-indicating triangle.
 - Improved movement logic for smooth and stable speed behavior.
+- Added basic track-mask collision so the car respects road boundaries.
+- Improved collision accuracy with multiple rotating footprint points.
+- Added bump-away wall response to reduce wall-sticking.
+- Added rotation-aware collision checks near walls.
 
 ### Implemented API
 
@@ -27,7 +31,7 @@ Machine learning car racing simulator built in Python using Pygame.
 
 - Added `car.py` with a basic `Car` class and simple movement physics.
 - `Car(x, y)` stores position and initializes `x`, `y`, `angle`, and `speed`.
-- `update()` reads keyboard state with `pygame.key.get_pressed()`.
+- `update(track)` reads keyboard state with `pygame.key.get_pressed()` and checks movement against the track mask.
 - Arrow keys control the car:
 	- `UP`: accelerate forward
 	- `DOWN`: accelerate backward / brake into reverse
@@ -37,6 +41,9 @@ Machine learning car racing simulator built in Python using Pygame.
 - Simple constants are included in `car.py` for forward acceleration, reverse acceleration, braking deceleration, rotation speed, max forward speed, max reverse speed, and friction.
 - Forward and reverse speed are clamped consistently every frame.
 - Friction now slows the car smoothly toward zero without overshooting.
+- The car now checks multiple footprint points with `track.is_road(...)` before applying movement.
+- On collision, the car is pushed slightly backward and speed is reduced strongly.
+- Rotation is now validated against the track before angle changes are applied.
 - `draw(screen)` renders a centered red triangle using `pygame.draw.polygon`.
 - The triangle rotates from `self.angle`, so the front of the car is visually clear.
 
@@ -45,7 +52,34 @@ Machine learning car racing simulator built in Python using Pygame.
 - `main.py` now imports the `Car` class.
 - A car instance is created at the center of the track.
 - The game loop now calls `car.update()` every frame.
+- The game loop now calls `car.update(track)` every frame.
 - The car is drawn after the track using `car.draw(screen)`.
+
+### Track collision update
+
+- The car now respects track boundaries and cannot drive through walls.
+- Collision detection uses the PNG track mask via `track.is_road(...)`.
+- When the car tries to move off-road, movement is canceled and speed is set to zero.
+
+### Collision accuracy update
+
+- Collision detection now checks multiple points around the car footprint, not only one center point.
+- Collision points rotate with the car angle so checks stay aligned with the car orientation.
+- This reduces wall clipping, especially near corners and tight edges.
+
+### Collision response update
+
+- The car now bumps away from walls instead of only stopping abruptly.
+- Wall collisions push the car slightly backward along the opposite movement direction.
+- Collisions significantly reduce speed to punish impacts.
+- This helps prevent the car from getting stuck against walls.
+
+### Rotation collision update
+
+- Rotation is now collision-aware, even when turning in place.
+- The rotated car footprint is checked before applying angle changes.
+- If rotation would overlap a wall, the turn is canceled.
+- This reduces cases where the rear of the car gets stuck near walls.
 
 ### Controls
 

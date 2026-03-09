@@ -8,7 +8,7 @@ def main() -> None:
     pygame.init()
 
     track = Track("assets/track.png")
-    car = Car(track.width / 2, track.height / 2)
+    car = Car(50, track.height-50)
     screen = pygame.display.set_mode((track.width, track.height))
     pygame.display.set_caption("AI Car Game")
 
@@ -20,12 +20,12 @@ def main() -> None:
             if event.type == pygame.QUIT:
                 running = False
 
-        car.update()
+        car.update(track)
         screen.fill((0, 0, 0))
         track.draw(screen)
         car.draw(screen)
         pygame.display.flip()
-        clock.tick(240  )
+        clock.tick(240)
 
     pygame.quit()
 
