@@ -25,7 +25,7 @@ def main() -> None:
         track.draw(screen)
         car.draw(screen)
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(240  )
 
     pygame.quit()
 
