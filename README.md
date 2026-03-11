@@ -5,8 +5,17 @@ Machine learning car racing simulator built in Python using Pygame.
 
 - Added `track.py` with a `Track` class for PNG mask loading.
 - White pixels (`255, 255, 255`) are treated as drivable road.
-- Black and non-white pixels are treated as walls.
+- Red pixels (`255, 0, 0`) represent the start / finish line.
+- Green pixels (`0, 255, 0`) represent checkpoint lines.
+- Red and green marker pixels are also treated as drivable road.
+- Black and unexpected colors are treated as walls.
 - Out-of-bounds coordinates are treated as walls.
+- The game scans the PNG and groups connected green pixels into separate checkpoint regions by position.
+- Each checkpoint region is stored individually with a stable id and bounding box.
+- The red marker area is tracked as the start / finish region.
+- Checkpoints can be crossed in any order, but all must be crossed before a lap can count.
+- Crossing detection is event-based (entering a region), so standing on a line does not repeatedly trigger progress.
+- Live HUD now shows lap count and checkpoint progress.
 - Added keyboard-controlled movement to the `Car` class.
 - Milestone 1 now includes a playable moving car.
 - Updated car visuals to a direction-indicating triangle.
@@ -19,8 +28,24 @@ Machine learning car racing simulator built in Python using Pygame.
 ### Implemented API
 
 - `Track(image_path: str)` loads the image and stores `surface`, `width`, and `height`.
-- `is_road(x: float, y: float) -> bool` checks whether a point is drivable.
+- `get_pixel_color(x: float, y: float) -> tuple[int, int, int] | None` returns pixel RGB or `None` when out of bounds.
+- `is_road(x: float, y: float) -> bool` checks whether a point is drivable (white, red, or green).
+- `is_start_finish(x: float, y: float) -> bool` checks for exact start / finish marker color (red).
+- `is_checkpoint(x: float, y: float) -> bool` checks for exact checkpoint marker color (green).
+- `get_start_finish_region()` returns stored metadata for the start / finish region.
+- `get_checkpoint_regions()` returns all checkpoint regions with deterministic ids and metadata.
+- `get_checkpoint_id_at(x: float, y: float)` returns the checkpoint id under a point, if any.
+- `is_point_in_start_finish(x: float, y: float)` checks whether a point lies in the start / finish region.
+- `get_region_at(x: float, y: float)` returns a unified region query result.
 - `draw(screen)` draws the track at `(0, 0)`.
+
+### Lap and checkpoint progression
+
+- Added `lap.py` with `LapManager` for checkpoint progress and lap counting.
+- Lap tracking starts on the first red-line crossing event.
+- A lap is counted only when the red line is crossed again after all checkpoint ids have been crossed in the current lap.
+- Checkpoint completion is reset only after a lap is completed.
+- Re-entering a line can generate a new crossing event, but already completed checkpoints stay completed for the current lap.
 
 ### Current runnable entry point
 

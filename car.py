@@ -13,14 +13,14 @@ class Car:
 
         # Tuned for smooth, predictable Milestone 1 movement.
         self.forward_acceleration = 0.01
-        self.reverse_acceleration = 0.05
+        self.reverse_acceleration = 0.075
         self.brake_deceleration = 0.10
         self.friction = 0.02
         self.rotation_speed = 0.05
-        self.max_forward_speed = 7
+        self.max_forward_speed = 5
         self.max_reverse_speed = -2.5
         self.turn_min_speed = 0.05
-        self.collision_bump_distance = 4.0
+        self.collision_bump_distance = 15.0
         self.collision_speed_factor = 0.3
 
     def update(self, track) -> None:
@@ -136,4 +136,4 @@ class Car:
             rotated_y = px * sin_a + py * cos_a
             world_points.append((self.x + rotated_x, self.y + rotated_y))
 
-        pygame.draw.polygon(screen, (255, 0, 0), world_points)
+        pygame.draw.polygon(screen, (128, 0, 128), world_points)
