@@ -21,9 +21,17 @@ Features:
 - Basic physics (speed, steering)
 - Collision with walls
 - Window renders track and car
+- Start / finish line detection
+- Checkpoint detection and zone grouping
+- Lap validation (all checkpoints required before finish counts)
+- Lap counting
+- Lap timers
+- Fastest lap tracking
+- Race completion after 3 valid laps
+- Finish screen with race results
 
 Definition of done:
-Running `python main.py` allows the user to drive the car around.
+Running `python main.py` allows the user to drive the car around, complete valid laps, and finish a 3-lap race with results shown.
 
 ---
 
@@ -46,18 +54,16 @@ Sensors return normalized distance values.
 
 ---
 
-# Milestone 3 – Laps
+# Milestone 3 – Completed Earlier
 
 Files:
 - lap.py
 
 Features:
-- Start line
-- Checkpoints
-- Lap counter
+- Lap system scope was completed in Milestone 1 and is no longer a future milestone item.
 
 Definition of done:
-Car completes laps only if checkpoints are crossed in correct order.
+- N/A (covered by Milestone 1).
 
 ---
 
