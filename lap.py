@@ -21,15 +21,18 @@ class LapState:
     current_lap_start_ms: int | None = None
     fastest_lap_ms: int | None = None
     last_completed_lap_ms: int | None = None
+    race_finished: bool = False
+    final_total_time_ms: int | None = None
 
 
 class LapManager:
     """Track event-based crossings and lap completion from car position."""
 
-    def __init__(self, track: Track) -> None:
+    def __init__(self, track: Track, laps_to_finish: int = 3) -> None:
         self.track = track
         self.state = LapState()
         self.total_checkpoints = len(track.get_checkpoint_regions())
+        self.laps_to_finish = laps_to_finish
 
         self._was_on_start_finish = False
         self._last_checkpoint_id: int | None = None
@@ -37,6 +40,9 @@ class LapManager:
     def update(self, x: float, y: float, speed: float, accelerating: bool) -> dict[str, object]:
         """Update lap state from current car position and return frame events."""
         now_ms = pygame.time.get_ticks()
+
+        if self.state.race_finished:
+            return self._build_info(now_ms, lap_completed=False)
 
         if not self.state.timer_started and accelerating and speed > 0.05:
             self.state.timer_started = True
@@ -72,6 +78,13 @@ class LapManager:
 
                     self.state.current_lap_start_ms = now_ms
 
+                if self.state.lap_count >= self.laps_to_finish:
+                    self.state.race_finished = True
+                    if self.state.timer_started and self.state.run_start_ms is not None:
+                        self.state.final_total_time_ms = now_ms - self.state.run_start_ms
+                    else:
+                        self.state.final_total_time_ms = 0
+
         if self.state.lap_started and entered_checkpoint:
             checkpoint_crossed_id = current_checkpoint_id
             self.state.crossed_checkpoints.add(current_checkpoint_id)
@@ -79,24 +92,46 @@ class LapManager:
         self._was_on_start_finish = on_start_finish
         self._last_checkpoint_id = current_checkpoint_id
 
+        return self._build_info(now_ms, lap_completed=lap_completed)
+
+    def get_status(self) -> dict[str, object]:
+        """Return a snapshot of lap and timer state without advancing logic."""
+        return self._build_info(pygame.time.get_ticks(), lap_completed=False)
+
+    def reset(self) -> None:
+        """Reset race progress and timing state for a fresh run."""
+        self.state = LapState()
+        self._was_on_start_finish = False
+        self._last_checkpoint_id = None
+
+    def _build_info(self, now_ms: int, lap_completed: bool) -> dict[str, object]:
+        """Build a consistent state payload for HUD or finish screen rendering."""
         total_elapsed_ms = 0
-        if self.state.timer_started and self.state.run_start_ms is not None:
+        if self.state.race_finished:
+            total_elapsed_ms = self.state.final_total_time_ms or 0
+        elif self.state.timer_started and self.state.run_start_ms is not None:
             total_elapsed_ms = now_ms - self.state.run_start_ms
 
         current_lap_elapsed_ms = 0
-        if self.state.timer_started and self.state.current_lap_start_ms is not None:
+        if (
+            not self.state.race_finished
+            and self.state.timer_started
+            and self.state.current_lap_start_ms is not None
+        ):
             current_lap_elapsed_ms = now_ms - self.state.current_lap_start_ms
 
         return {
-            "entered_start_finish": entered_start_finish,
-            "entered_checkpoint": entered_checkpoint,
-            "checkpoint_id": checkpoint_crossed_id,
+            "entered_start_finish": False,
+            "entered_checkpoint": False,
+            "checkpoint_id": None,
             "lap_completed": lap_completed,
             "lap_count": self.state.lap_count,
             "crossed_checkpoints": len(self.state.crossed_checkpoints),
             "total_checkpoints": self.total_checkpoints,
             "lap_started": self.state.lap_started,
             "timer_started": self.state.timer_started,
+            "race_finished": self.state.race_finished,
+            "laps_to_finish": self.laps_to_finish,
             "total_time_ms": total_elapsed_ms,
             "current_lap_time_ms": current_lap_elapsed_ms,
             "fastest_lap_ms": self.state.fastest_lap_ms,

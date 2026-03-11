@@ -26,6 +26,13 @@ Machine learning car racing simulator built in Python using Pygame.
 - Timing starts only when the car first accelerates, not when the window opens.
 - The HUD shows total run time, current lap time, and fastest completed lap time.
 - Fastest lap updates only from valid completed laps.
+- The race now ends automatically after 3 valid completed laps.
+- When lap 3 is completed, gameplay updates stop and timing is frozen.
+- The game displays a finish screen with total time and fastest lap.
+- The finish screen now includes a clickable `Retry` button.
+- Clicking `Retry` starts a new race without restarting the program.
+- Retry resets laps, checkpoints, timers, fastest lap, and finished state.
+- On retry, the car respawns on the start line using automatic spawn pose detection.
 - Added keyboard-controlled movement to the `Car` class.
 - Milestone 1 now includes a playable moving car.
 - Updated car visuals to a direction-indicating triangle.
