@@ -16,6 +16,16 @@ Machine learning car racing simulator built in Python using Pygame.
 - Checkpoints can be crossed in any order, but all must be crossed before a lap can count.
 - Crossing detection is event-based (entering a region), so standing on a line does not repeatedly trigger progress.
 - Live HUD now shows lap count and checkpoint progress.
+- Car spawn is now derived automatically from the red start / finish region.
+- Spawn selection uses the middle area of the red region, with nearby red-pixel fallback if needed.
+- Start-line direction is estimated from a small middle-pixel window on the red region.
+- Car spawn angle is set perpendicular to the estimated start-line direction.
+- The chosen perpendicular is the one whose forward test point faces drivable track.
+- Spawn is safety-validated against road and car footprint points to avoid starting inside walls.
+- The game now tracks timing information for the run and laps.
+- Timing starts only when the car first accelerates, not when the window opens.
+- The HUD shows total run time, current lap time, and fastest completed lap time.
+- Fastest lap updates only from valid completed laps.
 - Added keyboard-controlled movement to the `Car` class.
 - Milestone 1 now includes a playable moving car.
 - Updated car visuals to a direction-indicating triangle.
@@ -37,6 +47,8 @@ Machine learning car racing simulator built in Python using Pygame.
 - `get_checkpoint_id_at(x: float, y: float)` returns the checkpoint id under a point, if any.
 - `is_point_in_start_finish(x: float, y: float)` checks whether a point lies in the start / finish region.
 - `get_region_at(x: float, y: float)` returns a unified region query result.
+- `get_start_finish_pixels()` returns sorted red region pixels for deterministic spawn logic.
+- `get_spawn_pose()` returns `(spawn_x, spawn_y, spawn_angle)` derived from the red start line.
 - `draw(screen)` draws the track at `(0, 0)`.
 
 ### Lap and checkpoint progression
@@ -46,6 +58,8 @@ Machine learning car racing simulator built in Python using Pygame.
 - A lap is counted only when the red line is crossed again after all checkpoint ids have been crossed in the current lap.
 - Checkpoint completion is reset only after a lap is completed.
 - Re-entering a line can generate a new crossing event, but already completed checkpoints stay completed for the current lap.
+- `LapManager` now also handles run/lap timing state.
+- Timing uses `mm:ss.xx` formatting and shows `--:--.--` for fastest lap until the first valid completion.
 
 ### Current runnable entry point
 

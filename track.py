@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+import math
 
 import pygame
 
@@ -93,6 +94,144 @@ class Track:
             return ("checkpoint", checkpoint_id)
 
         return None
+
+    def get_start_finish_pixels(self) -> list[tuple[int, int]]:
+        """Return start/finish pixels in deterministic sorted order."""
+        return sorted(self._start_finish_lookup, key=lambda point: (point[1], point[0]))
+
+    def get_spawn_pose(self) -> tuple[float, float, float]:
+        """Return a safe spawn pose (x, y, angle) derived from the red start line."""
+        red_pixels = self.get_start_finish_pixels()
+        if not red_pixels:
+            raise ValueError("Spawn failed: no red start/finish region found in track image.")
+
+        middle_index = len(red_pixels) // 2
+        line_angle = self._estimate_start_line_angle(red_pixels)
+        ordered_candidates = self._ordered_search_pixels(red_pixels, middle_index)
+
+        for pixel_x, pixel_y in ordered_candidates:
+            spawn_x = float(pixel_x)
+            spawn_y = float(pixel_y)
+
+            if not self.is_road(spawn_x, spawn_y):
+                continue
+
+            angle = self._choose_facing_perpendicular(spawn_x, spawn_y, line_angle)
+            if angle is None:
+                continue
+
+            if self._is_spawn_safe(spawn_x, spawn_y, angle):
+                return (spawn_x, spawn_y, angle)
+
+        raise ValueError(
+            "Spawn failed: no safe spawn pose found from the red start/finish region. "
+            "Check that the red line is connected to drivable road and not inside walls."
+        )
+
+    def _estimate_start_line_angle(self, sorted_pixels: list[tuple[int, int]]) -> float:
+        """Estimate start-line angle from a small window around middle pixels."""
+        count = len(sorted_pixels)
+        window_size = 11 if count >= 11 else (5 if count >= 5 else count)
+        middle_index = count // 2
+        half = window_size // 2
+
+        start = max(0, middle_index - half)
+        end = min(count, start + window_size)
+        start = max(0, end - window_size)
+
+        window = sorted_pixels[start:end]
+        first_x, first_y = window[0]
+        last_x, last_y = window[-1]
+
+        delta_x = last_x - first_x
+        delta_y = last_y - first_y
+        if delta_x == 0 and delta_y == 0:
+            return 0.0
+
+        return math.atan2(delta_y, delta_x)
+
+    def _ordered_search_pixels(
+        self,
+        sorted_pixels: list[tuple[int, int]],
+        middle_index: int,
+    ) -> list[tuple[int, int]]:
+        """Return pixels ordered from center outward for deterministic fallback search."""
+        ordered: list[tuple[int, int]] = []
+        used: set[int] = set()
+        total = len(sorted_pixels)
+
+        for distance in range(total):
+            left = middle_index - distance
+            right = middle_index + distance
+
+            if 0 <= left < total and left not in used:
+                ordered.append(sorted_pixels[left])
+                used.add(left)
+
+            if 0 <= right < total and right not in used:
+                ordered.append(sorted_pixels[right])
+                used.add(right)
+
+            if len(ordered) == total:
+                break
+
+        return ordered
+
+    def _choose_facing_perpendicular(self, x: float, y: float, line_angle: float) -> float | None:
+        """Choose perpendicular angle that faces drivable road from spawn point."""
+        candidate_a = self._normalize_angle(line_angle + (math.pi / 2.0))
+        candidate_b = self._normalize_angle(line_angle - (math.pi / 2.0))
+
+        test_distance = 16.0
+        valid_a = self.is_road(x + math.cos(candidate_a) * test_distance, y + math.sin(candidate_a) * test_distance)
+        valid_b = self.is_road(x + math.cos(candidate_b) * test_distance, y + math.sin(candidate_b) * test_distance)
+
+        if valid_a and valid_b:
+            return min(candidate_a, candidate_b)
+        if valid_a:
+            return candidate_a
+        if valid_b:
+            return candidate_b
+
+        return None
+
+    def _is_spawn_safe(self, x: float, y: float, angle: float) -> bool:
+        """Validate spawn center and footprint against drivable track pixels."""
+        if not self.is_road(x, y):
+            return False
+
+        for point_x, point_y in self._get_car_footprint_points(x, y, angle):
+            if not self.is_road(point_x, point_y):
+                return False
+
+        return True
+
+    def _get_car_footprint_points(self, center_x: float, center_y: float, angle: float) -> list[tuple[float, float]]:
+        """Return car collision footprint points at a candidate pose."""
+        local_points = [
+            (12.0, 0.0),
+            (7.0, -4.5),
+            (7.0, 4.5),
+            (0.0, -6.0),
+            (0.0, 6.0),
+            (-8.0, -7.0),
+            (-8.0, 7.0),
+        ]
+
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        points: list[tuple[float, float]] = []
+
+        for local_x, local_y in local_points:
+            world_x = center_x + (local_x * cos_a - local_y * sin_a)
+            world_y = center_y + (local_x * sin_a + local_y * cos_a)
+            points.append((world_x, world_y))
+
+        return points
+
+    def _normalize_angle(self, angle: float) -> float:
+        """Normalize radians to the range [-pi, pi]."""
+        return math.atan2(math.sin(angle), math.cos(angle))
 
     def _scan_marker_regions(self) -> None:
         """Find connected marker regions and build fast point lookup tables."""
