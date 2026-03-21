@@ -10,6 +10,10 @@ class Car:
         self.y = y
         self.angle = 75
         self.speed = 0.0
+        self.sensor_relative_angles = tuple(math.radians(angle) for angle in (-90, -45, -20, 0, 20, 45, 90))
+        self.sensor_max_distance = 140.0
+        self.sensor_readings = [1.0] * len(self.sensor_relative_angles)
+        self.sensor_debug_rays: list[dict[str, object]] = []
 
         # Tuned for smooth, predictable Milestone 1 movement.
         self.forward_acceleration = 0.01
@@ -20,7 +24,7 @@ class Car:
         self.max_forward_speed = 5
         self.max_reverse_speed = -2.5
         self.turn_min_speed = 0.05
-        self.collision_bump_distance = 15.0
+        self.collision_bump_distance = 12.0
         self.collision_speed_factor = 0.3
 
     def update(self, track) -> None:
@@ -118,22 +122,42 @@ class Car:
 
         return world_points
 
+    def get_sensor_readings(self, track) -> list[float]:
+        """Return 7 normalized sensor distances and cache ray endpoints for debug drawing."""
+        readings: list[float] = []
+        debug_rays: list[dict[str, object]] = []
+
+        for relative_angle in self.sensor_relative_angles:
+            sensor_angle = self.angle + relative_angle
+            distance = track.raycast((self.x, self.y), sensor_angle, self.sensor_max_distance, step=1.0)
+            normalized_distance = max(0.0, min(1.0, distance / self.sensor_max_distance))
+            end_x = self.x + math.cos(sensor_angle) * distance
+            end_y = self.y + math.sin(sensor_angle) * distance
+
+            readings.append(normalized_distance)
+            debug_rays.append(
+                {
+                    "start": (self.x, self.y),
+                    "end": (end_x, end_y),
+                    "distance": distance,
+                    "normalized": normalized_distance,
+                }
+            )
+
+        self.sensor_readings = readings
+        self.sensor_debug_rays = debug_rays
+        return list(readings)
+
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the car as a rotated triangle with a clear front point."""
-        # Local triangle points around the car center: front, rear-left, rear-right.
-        local_points = [
-            (12.0, 0.0),
-            (-8.0, -7.0),
-            (-8.0, 7.0),
-        ]
+        """Draw the car as a rotated rectangle with colored front and back halves."""
+        car_width = 20
+        car_height = 10
+        half_width = car_width // 2
 
-        world_points = []
-        cos_a = math.cos(self.angle)
-        sin_a = math.sin(self.angle)
+        car_surface = pygame.Surface((car_width, car_height), pygame.SRCALPHA)
+        pygame.draw.rect(car_surface, (255, 0, 0), (0, 0, half_width, car_height))
+        pygame.draw.rect(car_surface, (0, 255, 0), (half_width, 0, car_width - half_width, car_height))
 
-        for px, py in local_points:
-            rotated_x = px * cos_a - py * sin_a
-            rotated_y = px * sin_a + py * cos_a
-            world_points.append((self.x + rotated_x, self.y + rotated_y))
-
-        pygame.draw.polygon(screen, (128, 0, 128), world_points)
+        rotated_surface = pygame.transform.rotate(car_surface, -math.degrees(self.angle))
+        rotated_rect = rotated_surface.get_rect(center=(self.x, self.y))
+        screen.blit(rotated_surface, rotated_rect)

@@ -56,6 +56,32 @@ class Track:
             self.CHECKPOINT_COLOR,
         }
 
+    def is_wall(self, x: float, y: float) -> bool:
+        """Return True for walls and out-of-bounds coordinates."""
+        return not self.is_road(x, y)
+
+    def raycast(
+        self,
+        origin: tuple[float, float],
+        angle: float,
+        max_dist: float,
+        step: float = 1.0,
+    ) -> float:
+        """Step along a ray until a wall is hit or max distance is reached."""
+        origin_x, origin_y = origin
+        if self.is_wall(origin_x, origin_y):
+            return 0.0
+
+        distance = step
+        while distance <= max_dist:
+            sample_x = origin_x + math.cos(angle) * distance
+            sample_y = origin_y + math.sin(angle) * distance
+            if self.is_wall(sample_x, sample_y):
+                return distance
+            distance += step
+
+        return max_dist
+
     def is_start_finish(self, x: float, y: float) -> bool:
         """Return True only when the queried pixel is the start/finish marker color."""
         return self.get_pixel_color(x, y) == self.START_FINISH_COLOR

@@ -13,6 +13,15 @@ def create_car_at_spawn(track: Track) -> Car:
     return car
 
 
+def draw_sensor_rays(screen: pygame.Surface, sensor_debug_rays: list[dict[str, object]]) -> None:
+    """Draw sensor rays and endpoints for the current car pose."""
+    for ray in sensor_debug_rays:
+        start = ray["start"]
+        end = ray["end"]
+        pygame.draw.line(screen, (0, 220, 255), start, end, 2)
+        pygame.draw.circle(screen, (255, 255, 0), (int(end[0]), int(end[1])), 3)
+
+
 def draw_finish_screen(
     screen: pygame.Surface,
     hud_font: pygame.font.Font,
@@ -98,6 +107,7 @@ def main() -> None:
             accelerating = keys[pygame.K_UP] and not keys[pygame.K_DOWN]
 
             car.update(track)
+            car.get_sensor_readings(track)
             lap_info = lap_manager.update(car.x, car.y, car.speed, accelerating)
 
         if lap_info["race_finished"]:
@@ -105,6 +115,7 @@ def main() -> None:
         else:
             screen.fill((0, 0, 0))
             track.draw(screen)
+            draw_sensor_rays(screen, car.sensor_debug_rays)
             car.draw(screen)
 
             lap_text = hud_font.render(f"Laps: {lap_info['lap_count']}", True, (255, 255, 255))
