@@ -1,198 +1,404 @@
 # ai-car-game
+
 Machine learning car racing simulator built in Python using Pygame.
 
-## Current status
+---
 
-### Milestone 1
+# 1. Project Overview
 
-- Added `track.py` with a `Track` class for PNG mask loading.
-- White pixels (`255, 255, 255`) are treated as drivable road.
-- Red pixels (`255, 0, 0`) represent the start / finish line.
-- Green pixels (`0, 255, 0`) represent checkpoint lines.
-- Red and green marker pixels are also treated as drivable road.
-- Black and unexpected colors are treated as walls.
-- Out-of-bounds coordinates are treated as walls.
-- The game scans the PNG and groups connected green pixels into separate checkpoint regions by position.
-- Each checkpoint region is stored individually with a stable id and bounding box.
-- The red marker area is tracked as the start / finish region.
-- Checkpoints can be crossed in any order, but all must be crossed before a lap can count.
-- Crossing detection is event-based (entering a region), so standing on a line does not repeatedly trigger progress.
-- Live HUD now shows lap count and checkpoint progress.
-- Car spawn is now derived automatically from the red start / finish region.
-- Spawn selection uses the middle area of the red region, with nearby red-pixel fallback if needed.
-- Start-line direction is estimated from a small middle-pixel window on the red region.
-- Car spawn angle is set perpendicular to the estimated start-line direction.
-- The chosen perpendicular is the one whose forward test point faces drivable track.
-- Spawn is safety-validated against road and car footprint points to avoid starting inside walls.
-- The game now tracks timing information for the run and laps.
-- Timing starts only when the car first accelerates, not when the window opens.
-- The HUD shows total run time, current lap time, and fastest completed lap time.
-- Fastest lap updates only from valid completed laps.
-- The race now ends automatically after 3 valid completed laps.
-- When lap 3 is completed, gameplay updates stop and timing is frozen.
-- The game displays a finish screen with total time and fastest lap.
-- The finish screen now includes a clickable `Retry` button.
-- Clicking `Retry` starts a new race without restarting the program.
-- Retry resets laps, checkpoints, timers, fastest lap, and finished state.
-- On retry, the car respawns on the start line using automatic spawn pose detection.
-- Added keyboard-controlled movement to the `Car` class.
-- Milestone 1 now includes a playable moving car.
-- Updated car visuals to a direction-indicating rectangle.
-- Improved movement logic for smooth and stable speed behavior.
-- Added basic track-mask collision so the car respects road boundaries.
-- Improved collision accuracy with multiple rotating footprint points.
-- Added bump-away wall response to reduce wall-sticking.
-- Added rotation-aware collision checks near walls.
+This project is a **2D top-down car racing simulator** built in Python using Pygame. It is designed to evolve into a **reinforcement learning (RL) training environment**.
 
-### Milestone 2
+The system serves two primary purposes:
 
-- Added `Track.raycast(...)` for simple pixel-sampled wall-distance checks.
-- Added `Track.is_wall(...)` so wall and out-of-bounds checks are explicit.
-- Added 7 car sensors using relative angles `[-90, -45, -20, 0, 20, 45, 90]` degrees.
-- Sensor readings are normalized to the range `0.0..1.0`.
-- Sensor rays are drawn in the playable game as a debug overlay.
-- Added headless pytest coverage for wall checks, raycasting, collision behavior, and sensor output length/range.
+1. A **playable racing game** where a human can control a car
+2. A **machine learning environment** where an AI agent can learn to drive using structured observations and rewards
 
-### Milestone 4
+The key idea is to:
+- First build a **fully functional game**
+- Then progressively expose **clean inputs and outputs**
+- So that an AI can interact with the simulation in a standard way
 
-- Added `env.py` with a `CarRacingEnv` wrapper for headless RL-style interaction.
-- `CarRacingEnv.reset(seed=None)` returns a stable 8-value observation.
-- `CarRacingEnv.step(action)` returns `(obs, reward, done, info)`.
-- Observation is exactly 7 normalized sensor values plus 1 normalized speed value.
-- Action accepts `steer`, `throttle`, and `brake` with safe clamping.
-- Headless mode runs without opening a pygame window.
-- The environment reuses the existing track, car, lap, collision, and sensor systems instead of duplicating them.
+---
 
-### Implemented API
+# 2. Project Goals
 
-- `Track(image_path: str)` loads the image and stores `surface`, `width`, and `height`.
-- `get_pixel_color(x: float, y: float) -> tuple[int, int, int] | None` returns pixel RGB or `None` when out of bounds.
-- `is_road(x: float, y: float) -> bool` checks whether a point is drivable (white, red, or green).
-- `is_start_finish(x: float, y: float) -> bool` checks for exact start / finish marker color (red).
-- `is_checkpoint(x: float, y: float) -> bool` checks for exact checkpoint marker color (green).
-- `get_start_finish_region()` returns stored metadata for the start / finish region.
-- `get_checkpoint_regions()` returns all checkpoint regions with deterministic ids and metadata.
-- `get_checkpoint_id_at(x: float, y: float)` returns the checkpoint id under a point, if any.
-- `is_point_in_start_finish(x: float, y: float)` checks whether a point lies in the start / finish region.
-- `get_region_at(x: float, y: float)` returns a unified region query result.
-- `get_start_finish_pixels()` returns sorted red region pixels for deterministic spawn logic.
-- `get_spawn_pose()` returns `(spawn_x, spawn_y, spawn_angle)` derived from the red start line.
-- `is_wall(x: float, y: float) -> bool` checks for walls and treats out-of-bounds as wall.
-- `raycast(origin, angle, max_dist, step=1.0) -> float` steps along a ray until it hits a wall or reaches max distance.
-- `draw(screen)` draws the track at `(0, 0)`.
+The project aims to:
 
-### Environment API (Milestone 4)
+- Simulate a car driving on a track using simple physics
+- Use an image-based track system for easy editing
+- Provide sensor-based observations for AI instead of images
+- Implement laps and checkpoint logic
+- Provide a Gym-style environment API (`reset()` / `step()`)
+- Support headless execution for fast training
 
-- `CarRacingEnv(headless=True, track_path=None, max_steps=1000, max_stuck_steps=120)` creates the environment wrapper.
-- `reset(seed=None) -> list[float]` resets the simulation and returns the initial observation.
-- `step(action) -> (obs, reward, done, info)` advances one simulation step.
-- `obs` is exactly 8 values in this order: 7 normalized sensor values, then 1 normalized speed value.
-- `action` accepts either a dict with `steer`, `throttle`, `brake` or a 3-item sequence in that order.
-- `headless=True` skips window creation while still running physics, laps, and sensors.
+---
 
-### Lap and checkpoint progression
+# 3. Core Design Principles
 
-- Added `lap.py` with `LapManager` for checkpoint progress and lap counting.
-- Lap tracking starts on the first red-line crossing event.
-- A lap is counted only when the red line is crossed again after all checkpoint ids have been crossed in the current lap.
-- Checkpoint completion is reset only after a lap is completed.
-- Re-entering a line can generate a new crossing event, but already completed checkpoints stay completed for the current lap.
-- `LapManager` now also handles run/lap timing state.
-- Timing uses `mm:ss.xx` formatting and shows `--:--.--` for fastest lap until the first valid completion.
+- **Simple > complex**
+  - Arcade physics instead of realistic physics
+- **Modular architecture**
+  - No large combined files
+- **Track = image mask**
+  - Fast iteration, no track editor required
+- **Sensors instead of vision**
+  - Faster and easier for ML
+- **Milestone-driven development**
+  - System is always runnable
 
-### Current runnable entry point
+---
 
-- Added `main.py` for the Milestone 1 display loop.
-- `main.py` initializes pygame, loads `Track("assets/Track.png")`, opens a window sized from the track, draws every frame, handles quit, and caps at 60 FPS.
+# 4. Track System (Critical)
 
-### Car module (Milestone 1)
+The track is defined using a PNG image.
 
-- Added `car.py` with a basic `Car` class and simple movement physics.
-- `Car(x, y)` stores position and initializes `x`, `y`, `angle`, and `speed`.
-- `update(track)` reads keyboard state with `pygame.key.get_pressed()` and checks movement against the track mask.
-- Arrow keys control the car:
-	- `UP`: accelerate forward
-	- `DOWN`: accelerate backward / brake into reverse
-	- `LEFT`: rotate left
-	- `RIGHT`: rotate right
-- Movement uses `math.cos(angle)` and `math.sin(angle)` with speed.
-- Simple constants are included in `car.py` for forward acceleration, reverse acceleration, braking deceleration, rotation speed, max forward speed, max reverse speed, and friction.
-- Forward and reverse speed are clamped consistently every frame.
-- Friction now slows the car smoothly toward zero without overshooting.
-- The car now checks multiple footprint points with `track.is_road(...)` before applying movement.
-- On collision, the car is pushed slightly backward and speed is reduced strongly.
-- Rotation is now validated against the track before angle changes are applied.
-- `draw(screen)` renders a centered rotated rectangle using a temporary surface.
-- The front half is green and the back half is red, so direction is visually clear.
+## Color Rules
 
-### Car module (Milestone 2)
+| Color | RGB | Meaning |
+|------|-----|--------|
+| White | (255,255,255) | Drivable road |
+| Black / other | Any | Wall / off-track |
+| Red | (255,0,0) | Start / finish line |
+| Green | (0,255,0) | Checkpoints |
 
-- `get_sensor_readings(track)` returns exactly 7 normalized sensor values.
-- Sensor directions are derived from the current car heading, so the rays rotate with the car.
-- Sensor debug endpoints are cached on the car for the game loop to draw.
+Important rules:
 
-### Car rendering
+- Red and green pixels are also treated as **drivable road**
+- Out-of-bounds coordinates are treated as **walls**
+- The entire game logic (collision + sensors) depends on this mask
 
-- `main.py` now imports the `Car` class.
-- A car instance is created at the center of the track.
-- The game loop now calls `car.update()` every frame.
-- The game loop now calls `car.update(track)` every frame.
-- The car is drawn after the track using `car.draw(screen)`.
-- The game now also draws the 7 sensor rays every frame for debugging.
+---
 
-### Track collision update
+# 5. Key Design Decisions (and Why)
 
-- The car now respects track boundaries and cannot drive through walls.
-- Collision detection uses the PNG track mask via `track.is_road(...)`.
-- When the car tries to move off-road, movement is canceled and speed is set to zero.
+## 5.1 Pygame
 
-### Collision accuracy update
+- Beginner-friendly
+- Full control over game loop
+- Easy rendering and input handling
 
-- Collision detection now checks multiple points around the car footprint, not only one center point.
-- Collision points rotate with the car angle so checks stay aligned with the car orientation.
-- This reduces wall clipping, especially near corners and tight edges.
+---
 
-### Collision response update
+## 5.2 Image-Based Track
 
-- The car now bumps away from walls instead of only stopping abruptly.
-- Wall collisions push the car slightly backward along the opposite movement direction.
-- Collisions significantly reduce speed to punish impacts.
-- This helps prevent the car from getting stuck against walls.
+Why this approach:
 
-### Rotation collision update
+- Extremely fast to create/edit tracks
+- No custom editor needed
+- Pixel sampling enables:
+  - Collision detection
+  - Raycasting for sensors
 
-- Rotation is now collision-aware, even when turning in place.
-- The rotated car footprint is checked before applying angle changes.
-- If rotation would overlap a wall, the turn is canceled.
-- This reduces cases where the rear of the car gets stuck near walls.
+---
 
-### Controls
+## 5.3 Ray Sensors (AI Vision System)
 
-- `UP` / `DOWN` to change speed
-- `LEFT` / `RIGHT` to steer
+The car uses 7 ray sensors:
 
-### Movement stability update
+Angles (relative to car direction):
+[-90, -45, -20, 0, 20, 45, 90]
 
-- Car movement logic was improved for smoother acceleration and deceleration.
-- Speed now increases and decreases smoothly with clearer forward/reverse behavior.
-- Forward and reverse speed limits are clamped consistently.
-- Friction now slows the car down smoothly without sudden jumps.
+Each ray:
+- Moves forward pixel by pixel
+- Stops when it hits a wall
+- Returns distance normalized to 0..1
 
-### Visual update (orientation)
+Why:
 
-- The car is now rendered as a rectangle instead of a triangle.
-- The rectangle rotates based on the car angle.
-- The front half is green and the back half is red to indicate direction.
-- This improves player control and usability.
+- Efficient representation of environment
+- Avoids heavy image processing
+- Standard in RL driving tasks
 
-### Tests
+---
 
-- Added headless pytest tests under `tests/`.
-- Tests cover out-of-bounds wall handling, raycast behavior, collision blocking, and 7-value normalized sensor output.
+## 5.4 Arcade Physics
 
-### Run commands
+The car uses simplified physics:
 
-- `python main.py`
-- `pytest`
-- `python -c "from env import CarRacingEnv; env=CarRacingEnv(headless=True); obs=env.reset(); print(len(obs)); env.close()"`
-- `python env.py`
+- Acceleration increases speed
+- Braking reduces speed
+- Friction reduces speed naturally
+- Steering rotates the car (scaled by speed)
+
+Why:
+
+- Easier to implement
+- Stable for ML training
+- Good enough for gameplay
+
+---
+
+## 5.5 Modular Architecture
+
+Files are strictly separated:
+
+- `track.py` → track logic and raycasting
+- `car.py` → car physics and sensors
+- `lap.py` → lap and checkpoint logic
+- `env.py` → RL environment wrapper
+- `main.py` → game loop and rendering
+
+Why:
+
+- Easier debugging
+- Cleaner structure
+- AI reuses game logic without duplication
+
+---
+
+## 5.6 Gym-Style Environment
+
+The AI interacts using:
+
+```python
+obs = env.reset()
+obs, reward, done, info = env.step(action)
+
+Why:
+
+Standard RL interface
+Compatible with ML frameworks
+Clean separation between simulation and UI
+
+5.7 Headless Mode
+
+The environment can run without rendering.
+
+Why:
+
+Training requires many iterations
+Rendering slows down performance
+Headless allows faster simulation
+
+# 6. System Architecture
+6.1 track.py
+
+Responsibilities:
+
+Load track image
+Provide pixel color access
+Detect road vs wall
+Perform raycasting
+Detect start/finish region
+Detect checkpoint regions
+Provide spawn position and angle
+
+6.2 car.py
+
+Responsibilities:
+
+Store position, angle, speed
+Apply movement physics
+Handle collision detection
+Read sensor values
+
+Features:
+
+Multi-point collision detection
+Rotation-aware collision
+Smooth speed handling
+Sensor system (7 rays)
+6.3 lap.py
+
+Responsibilities:
+
+Track checkpoint progress
+Count laps
+Manage timing
+
+Important logic:
+
+Checkpoints can be crossed in any order
+All checkpoints must be crossed before lap counts
+Lap completes when start line is crossed again
+6.4 env.py
+
+Responsibilities:
+
+Provide AI interface
+Run simulation headless
+Compute rewards
+
+Provides:
+
+reset()
+step(action)
+
+6.5 main.py
+
+Responsibilities:
+
+Run game loop
+Handle player input
+Render track, car, UI
+Draw debug visuals
+7. Player Controls
+
+Arrow keys are used:
+
+Key	Action
+UP	Accelerate
+DOWN	Brake / reverse
+LEFT	Steer left
+RIGHT	Steer right
+8. Game Mechanics
+8.1 Collision System
+Uses track mask
+Checks multiple points on car
+Prevents driving through walls
+Applies push-back and speed reduction
+8.2 Sensors
+7 ray sensors
+Rotate with car direction
+Return normalized distances
+Drawn for debugging
+8.3 Lap System
+Start line = red region
+Checkpoints = green regions
+Must cross all checkpoints (any order)
+Lap completes when red line is crossed again
+8.4 Timing System
+
+Tracks:
+
+Total run time
+Current lap time
+Fastest lap
+
+Rules:
+
+Timer starts on first acceleration
+Fastest lap updates only after valid lap
+8.5 Race Completion
+Race ends after 3 laps
+Finish screen is displayed
+Retry button resets full game state
+9. AI Environment Design
+9.1 Observations
+
+Vector of 8 values:
+
+Index	Description
+0–6	Sensor distances
+7	Normalized speed
+9.2 Actions
+
+Continuous input:
+
+steer ∈ [-1, 1]
+throttle ∈ [0, 1]
+brake ∈ [0, 1]
+9.3 Reward System
+
+Encourages:
+
+Forward progress
+Checkpoint completion
+Lap completion
+
+Penalizes:
+
+Collisions
+Being stuck
+Time steps
+9.4 Termination Conditions
+
+Episode ends when:
+
+Max steps reached
+Car stuck too long
+Race completed
+
+10. Current Status
+
+Milestone 1 – Playable Game ✅
+Full car control
+Collision system
+Track rendering
+Spawn system
+Smooth movement
+
+Milestone 2 – Sensors ✅
+Raycasting implemented
+7 sensors working
+Debug rendering
+Pytest tests added
+
+Milestone 3 – Laps & Race System ✅
+Checkpoints implemented
+Lap counting working
+Timing system added
+Finish screen + retry
+Milestone 4 – RL Environment ✅
+
+env.py implemented
+Headless mode working
+Observation and action space defined
+Reward system implemented
+
+11. System Flow
+Play Mode
+main.py runs game loop
+User controls car
+Car interacts with track
+Lap system updates
+UI renders output
+AI Mode
+env.reset() initializes environment
+AI sends action
+Simulation updates:
+physics
+sensors
+lap progress
+Returns:
+observation
+reward
+done
+
+12. Run Commands
+python main.py
+pytest
+python -c "from env import CarRacingEnv; env=CarRacingEnv(headless=True); obs=env.reset(); print(len(obs), obs)"
+
+13. Future Work (Next Milestones)
+Milestone 5 – Training
+Integrate Stable-Baselines3
+Train PPO agent
+Save/load models
+Evaluate lap times
+Milestone 6 – Observation Improvements
+Add angle to next checkpoint
+Add distance to checkpoint
+Improve navigation awareness
+Milestone 7 – Reward Optimization
+Improve reward shaping
+Penalize inefficient driving
+Encourage smooth control
+Milestone 8 – Multi-Track Support
+Multiple track files
+Randomized training
+Generalization
+Milestone 9 – Baseline AI
+Rule-based driver
+Debug and benchmarking tool
+Milestone 10 – Data Collection
+Record human gameplay
+Build imitation learning dataset
+
+14. Summary
+
+This project provides:
+
+A fully playable racing game
+A structured simulation environment
+A reinforcement learning interface
+
+It forms a complete pipeline from:
+
+GAME → SIMULATION → AI TRAINING
+
+while remaining:
+
+Simple
+Modular
+Extensible
