@@ -198,6 +198,7 @@ Multi-point collision detection
 Rotation-aware collision
 Smooth speed handling
 Sensor system (7 rays)
+
 6.3 lap.py
 
 Responsibilities:
@@ -211,6 +212,7 @@ Important logic:
 Checkpoints can be crossed in any order
 All checkpoints must be crossed before lap counts
 Lap completes when start line is crossed again
+
 6.4 env.py
 
 Responsibilities:
@@ -241,22 +243,29 @@ UP	Accelerate
 DOWN	Brake / reverse
 LEFT	Steer left
 RIGHT	Steer right
+
 8. Game Mechanics
+
 8.1 Collision System
+
 Uses track mask
 Checks multiple points on car
 Prevents driving through walls
 Applies push-back and speed reduction
 8.2 Sensors
+
 7 ray sensors
 Rotate with car direction
 Return normalized distances
 Drawn for debugging
+
 8.3 Lap System
+
 Start line = red region
 Checkpoints = green regions
 Must cross all checkpoints (any order)
 Lap completes when red line is crossed again
+
 8.4 Timing System
 
 Tracks:
@@ -269,11 +278,15 @@ Rules:
 
 Timer starts on first acceleration
 Fastest lap updates only after valid lap
+
 8.5 Race Completion
+
 Race ends after 3 laps
 Finish screen is displayed
 Retry button resets full game state
+
 9. AI Environment Design
+
 9.1 Observations
 
 Vector of 8 values:
@@ -281,6 +294,7 @@ Vector of 8 values:
 Index	Description
 0–6	Sensor distances
 7	Normalized speed
+
 9.2 Actions
 
 Continuous input:
@@ -301,6 +315,7 @@ Penalizes:
 Collisions
 Being stuck
 Time steps
+
 9.4 Termination Conditions
 
 Episode ends when:
@@ -329,14 +344,15 @@ Checkpoints implemented
 Lap counting working
 Timing system added
 Finish screen + retry
-Milestone 4 – RL Environment ✅
 
+Milestone 4 – RL Environment ✅
 env.py implemented
 Headless mode working
 Observation and action space defined
 Reward system implemented
 
 11. System Flow
+
 Play Mode
 main.py runs game loop
 User controls car
@@ -362,26 +378,32 @@ python -c "from env import CarRacingEnv; env=CarRacingEnv(headless=True); obs=en
 
 13. Future Work (Next Milestones)
 Milestone 5 – Training
+
 Integrate Stable-Baselines3
 Train PPO agent
 Save/load models
 Evaluate lap times
 Milestone 6 – Observation Improvements
+
 Add angle to next checkpoint
 Add distance to checkpoint
 Improve navigation awareness
 Milestone 7 – Reward Optimization
+
 Improve reward shaping
 Penalize inefficient driving
 Encourage smooth control
 Milestone 8 – Multi-Track Support
+
 Multiple track files
 Randomized training
 Generalization
 Milestone 9 – Baseline AI
+
 Rule-based driver
 Debug and benchmarking tool
 Milestone 10 – Data Collection
+
 Record human gameplay
 Build imitation learning dataset
 
