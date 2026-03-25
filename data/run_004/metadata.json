@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-03-25T18:47:51",
+  "environment_settings": {
+    "headless": true,
+    "max_steps": 1000,
+    "max_stuck_steps": 120,
+    "track_path": "C:\\Users\\alexb\\OneDrive\\Documentos\\VSCode projects\\Racing game\\ai-car-game\\assets\\Track.png"
+  },
+  "total_episodes_planned": 10
+}

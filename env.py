@@ -99,10 +99,14 @@ class CarRacingEnv:
             "crossed_checkpoints": lap_info["crossed_checkpoints"],
             "total_checkpoints": lap_info["total_checkpoints"],
             "race_finished": lap_info["race_finished"],
+            "lap_complete": bool(lap_info["race_finished"]),
             "collision": collision,
             "stuck_steps": self.stuck_steps,
             "step_count": self.step_count,
             "action": dict(validated_action),
+            "x": float(self.car.x),
+            "y": float(self.car.y),
+            "speed": float(self.car.speed),
         }
 
         if not self.headless:

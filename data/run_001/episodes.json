@@ -1,0 +1,72 @@
+[
+  {
+    "episode_id": 1,
+    "total_reward": -111.12924000000075,
+    "total_steps": 1000,
+    "done_reason": "max_steps",
+    "lap_completed": false
+  },
+  {
+    "episode_id": 2,
+    "total_reward": -93.07380000000157,
+    "total_steps": 1000,
+    "done_reason": "max_steps",
+    "lap_completed": false
+  },
+  {
+    "episode_id": 3,
+    "total_reward": -80.77440000000036,
+    "total_steps": 1000,
+    "done_reason": "max_steps",
+    "lap_completed": false
+  },
+  {
+    "episode_id": 4,
+    "total_reward": -88.83608000000117,
+    "total_steps": 1000,
+    "done_reason": "max_steps",
+    "lap_completed": false
+  },
+  {
+    "episode_id": 5,
+    "total_reward": -75.69599999999988,
+    "total_steps": 1000,
+    "done_reason": "max_steps",
+    "lap_completed": false
+  },
+  {
+    "episode_id": 6,
+    "total_reward": -59.19859999999995,
+    "total_steps": 1000,
+    "done_reason": "crash",
+    "lap_completed": false
+  },
+  {
+    "episode_id": 7,
+    "total_reward": -40.738160000000256,
+    "total_steps": 1000,
+    "done_reason": "max_steps",
+    "lap_completed": false
+  },
+  {
+    "episode_id": 8,
+    "total_reward": -44.39920000000018,
+    "total_steps": 1000,
+    "done_reason": "max_steps",
+    "lap_completed": false
+  },
+  {
+    "episode_id": 9,
+    "total_reward": -23.579560000000182,
+    "total_steps": 1000,
+    "done_reason": "max_steps",
+    "lap_completed": false
+  },
+  {
+    "episode_id": 10,
+    "total_reward": -29.739480000001013,
+    "total_steps": 1000,
+    "done_reason": "max_steps",
+    "lap_completed": false
+  }
+]
