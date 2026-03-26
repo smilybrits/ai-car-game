@@ -1,0 +1,13 @@
+{
+  "name": "safe_driver",
+  "time_penalty": -0.01,
+  "checkpoint_bonus": 0.8,
+  "lap_bonus": 4.0,
+  "speed_reward_weight": 0.01,
+  "collision_penalty": -2.0,
+  "stuck_penalty": -0.08,
+  "slow_penalty": -0.03,
+  "stuck_steps_threshold": 12,
+  "slow_speed_threshold": 0.05,
+  "action_threshold": 0.1
+}

@@ -27,17 +27,32 @@ class _PressedState:
 class CarRacingEnv:
     """Simple RL-style wrapper around the current track, car, and lap systems."""
 
+    DEFAULT_REWARD_CONFIG: dict[str, float] = {
+        "time_penalty": -0.01,
+        "checkpoint_bonus": 1.0,
+        "lap_bonus": 5.0,
+        "speed_reward_weight": 0.02,
+        "collision_penalty": -1.0,
+        "stuck_penalty": -0.05,
+        "slow_penalty": -0.02,
+        "stuck_steps_threshold": 15.0,
+        "slow_speed_threshold": 0.05,
+        "action_threshold": 0.1,
+    }
+
     def __init__(
         self,
         headless: bool = True,
         track_path: str | None = None,
         max_steps: int = 1000,
         max_stuck_steps: int = 120,
+        reward_config: Mapping[str, float] | None = None,
     ) -> None:
         self.headless = headless
         self.max_steps = max_steps
         self.max_stuck_steps = max_stuck_steps
         self.random = random.Random()
+        self.reward_config = self._resolve_reward_config(reward_config)
 
         self._ensure_pygame_ready()
         self.track_path = self._resolve_track_path(track_path)
@@ -146,6 +161,15 @@ class CarRacingEnv:
         car.angle = spawn_angle
         return car
 
+    def _resolve_reward_config(self, reward_config: Mapping[str, float] | None) -> dict[str, float]:
+        """Merge user reward settings over defaults and coerce to float."""
+        resolved = dict(self.DEFAULT_REWARD_CONFIG)
+        if reward_config is not None:
+            for key, value in reward_config.items():
+                if key in resolved:
+                    resolved[key] = float(value)
+        return resolved
+
     def _get_observation(self) -> list[float]:
         """Return 7 sensor readings plus 1 signed normalized speed value."""
         sensor_values = self.car.get_sensor_readings(self.track)
@@ -218,8 +242,10 @@ class CarRacingEnv:
 
     def _update_stuck_counter(self, action: dict[str, float], moved_distance: float) -> None:
         """Track repeated slow or stationary steps when the agent is trying to move."""
-        requested_motion = action["throttle"] > 0.1 or action["brake"] > 0.1
-        if requested_motion and moved_distance < 0.05 and abs(self.car.speed) < 0.05:
+        action_threshold = self.reward_config["action_threshold"]
+        slow_speed_threshold = self.reward_config["slow_speed_threshold"]
+        requested_motion = action["throttle"] > action_threshold or action["brake"] > action_threshold
+        if requested_motion and moved_distance < 0.05 and abs(self.car.speed) < slow_speed_threshold:
             self.stuck_steps += 1
         else:
             self.stuck_steps = 0
@@ -232,7 +258,7 @@ class CarRacingEnv:
         collision: bool,
     ) -> float:
         """Compute a simple reward from race progression, speed, and failure signals."""
-        reward = -0.01
+        reward = self.reward_config["time_penalty"]
 
         previous_checkpoints = int(previous_lap_info["crossed_checkpoints"])
         current_checkpoints = int(current_lap_info["crossed_checkpoints"])
@@ -240,20 +266,23 @@ class CarRacingEnv:
         current_laps = int(current_lap_info["lap_count"])
 
         if current_checkpoints > previous_checkpoints:
-            reward += 1.0 * (current_checkpoints - previous_checkpoints)
+            reward += self.reward_config["checkpoint_bonus"] * (current_checkpoints - previous_checkpoints)
 
         if current_laps > previous_laps:
-            reward += 5.0 * (current_laps - previous_laps)
+            reward += self.reward_config["lap_bonus"] * (current_laps - previous_laps)
 
-        reward += 0.02 * max(0.0, self._normalize_speed(self.car.speed))
+        reward += self.reward_config["speed_reward_weight"] * max(0.0, self._normalize_speed(self.car.speed))
 
         if collision:
-            reward -= 1.0
+            reward += self.reward_config["collision_penalty"]
 
-        if self.stuck_steps >= 15:
-            reward -= 0.05
-        elif abs(self.car.speed) < 0.05 and (action["throttle"] > 0.1 or action["brake"] > 0.1):
-            reward -= 0.02
+        if self.stuck_steps >= int(self.reward_config["stuck_steps_threshold"]):
+            reward += self.reward_config["stuck_penalty"]
+        elif abs(self.car.speed) < self.reward_config["slow_speed_threshold"] and (
+            action["throttle"] > self.reward_config["action_threshold"]
+            or action["brake"] > self.reward_config["action_threshold"]
+        ):
+            reward += self.reward_config["slow_penalty"]
 
         return reward
 

@@ -48,6 +48,9 @@ The system is strictly modular:
 * `main.py` → playable game loop
 * `train.py` → model training
 * `play_model.py` → visual playback of a trained model
+* `reward_utils.py` → reward config loading and validation
+* `reward_configs/` → named reward setup JSON files
+* `scripts/train_all_rewards.py` → sequential training runner for all reward configs
 * `data/` → model outputs and training data storage
 
 ---
@@ -171,18 +174,28 @@ What it currently does:
   * brake [0, 1]
 * Converts continuous action to the keyboard-control path used by car update.
 * Emits observation vector of 8 values (7 sensors + normalized speed).
-* Implements reward shaping (time penalty, checkpoint/lap rewards, collision/stuck penalties).
+* Implements reward shaping using configurable weights from `reward_config`.
+* Uses built-in defaults when no reward config is provided (backward compatible).
 * Implements done logic (max steps, stuck limit, race completion).
 * Provides telemetry in info including collision, lap fields, x, y, speed.
 
 Partially implemented or fragile points:
 
 * Action application temporarily monkey-patches pygame key state, which works in this single-env flow but is not ideal for multi-env or concurrent execution.
-(pretend a key is pressed for pygame when its actually not its the computer)
 
 Missing relative to strict design expectations:
 
 * No native Gymnasium terminated/truncated split in base env (handled in adapter inside train script).
+
+### reward_utils.py
+
+Exists: Yes.
+
+What it currently does:
+
+* Loads reward configuration JSON files.
+* Validates required reward keys and numeric fields.
+* Supports loading by explicit file path and by config name (`reward_configs/<name>.json`).
 
 ### main.py
 
@@ -223,16 +236,46 @@ What it currently does:
 
 * Creates headless environment.
 * Defines action and observation spaces for stable-baselines3 compatibility.
-(what actions can be taken, what data is recieved)
-* Trains PPO with `MlpPolicy`.
-
-* Saves model to `ppo_car_model.zip`.
-* Integrates run logging via `TrainingLogger`.
-(Record the run information)
+* Trains PPO with `MlpPolicy` in a time-based loop.
+* Runs training in fixed chunks (`TRAINING_CHUNK_TIMESTEPS`) using repeated `model.learn(..., reset_num_timesteps=False)` calls.
+* Stops automatically when configured wall-clock duration (`MAX_TRAINING_TIME`) is reached.
+* Accepts reward selection by:
+  * `--reward-config <path-to-json>`
+  * `--reward-name <name>` (loads `reward_configs/<name>.json`)
+* Passes selected reward config into `CarRacingEnv(headless=True, reward_config=...)`.
+* Saves periodic checkpoints under `models/<reward_name>/ppo_car_model.zip`.
+* Always saves a final model under `models/<reward_name>/ppo_car_model_final.zip`.
+* Writes logs under `data/<reward_name>/run_xxx/` via `TrainingLogger`.
 
 Partially implemented or fragile points:
 
-* Episode statistics used for planning are estimated from timesteps/max_steps and not guaranteed to match actual episode count.
+* Time stop condition is checked between chunks, so real elapsed time can overshoot the exact target by up to one training chunk runtime.
+* Default training duration is currently very short (`MAX_TRAINING_TIME = 30`), which is useful for quick checks but not for meaningful policy quality.
+
+### reward_configs/
+
+Exists: Yes.
+
+Current files:
+
+* `reward_configs/baseline.json`
+* `reward_configs/safe_driver.json`
+* `reward_configs/progress_heavy.json`
+
+What they currently do:
+
+* Define named reward-weight presets for training experiments.
+* Allow training multiple models without overwriting each other's outputs.
+
+### scripts/train_all_rewards.py
+
+Exists: Yes.
+
+What it currently does:
+
+* Finds all `*.json` files in `reward_configs/`.
+* Runs `train.py --reward-config <file>` sequentially for each config.
+* Uses no parallel execution.
 
 ### play_model.py
 
@@ -299,7 +342,7 @@ Key class:
 
 What it currently does:
 
-* Creates incremental run folders under `data/run_xxx`.
+* Creates incremental run folders under the configured base directory (for training this is `data/<reward_name>/run_xxx`).
 * Writes step-level rows to `steps.csv` incrementally.
 * Stores episode summaries and writes `episodes.json` at finalize.
 * Writes `metadata.json` with timestamp, environment settings, and planned episode estimate.
@@ -356,9 +399,12 @@ Status: Implemented.
 Why:
 
 * `train.py` integrates stable-baselines3 PPO with a Gymnasium adapter.
-* Headless training run starts and completes.
-* Model is saved to disk as `ppo_car_model.zip`.
+* Headless training run starts and executes in wall-clock bounded chunks.
+* Reward configuration can be selected by name or JSON path.
+* Checkpoint model is saved to disk per reward profile (`models/<reward_name>/ppo_car_model.zip`) during training.
+* Final model is saved per reward profile (`models/<reward_name>/ppo_car_model_final.zip`) on shutdown.
 * Data logging is integrated during training.
+* Data logging is separated per reward profile (`data/<reward_name>/run_xxx/`).
 
 ## 5.3 Exact Behaviour Currently Supported
 
@@ -372,13 +418,13 @@ Confirmed supported now:
 * Race completion flow and retry screen are implemented.
 * Environment API exists and returns observation, reward, done, info.
 * Headless mode exists and is used by training.
-* PPO training entrypoint exists and saves a model.
+* PPO training entrypoint uses time-based chunked learning, configurable reward profiles, and per-profile outputs.
 * Trained model playback via `play_model.py` opens the game window with autonomous driving.
 * Automated tests exist and pass for track/car coverage.
 * Data capture is active during training and writes:
-  * `data/run_xxx/steps.csv`
-  * `data/run_xxx/episodes.json`
-  * `data/run_xxx/metadata.json`
+  * `data/<reward_name>/run_xxx/steps.csv`
+  * `data/<reward_name>/run_xxx/episodes.json`
+  * `data/<reward_name>/run_xxx/metadata.json`
 
 ## 5.4 Known Gaps, Risks, and Next Work
 
@@ -387,6 +433,8 @@ Known gaps and likely fragile areas:
 * Checkpoint ordering is not enforced in lap logic; only set completion is enforced.
 * No dedicated tests for lap progression rules, env reward/termination correctness, or logger output schema.
 * Env action application uses temporary pygame key monkey-patching; acceptable for now but fragile for scaling.
+* Time-based training loop stops between chunks, so long chunk runtimes can reduce stopping-time precision.
+* Reward config validation currently checks required keys and numeric values, but does not enforce domain-specific bounds for each field.
 * Documentation source files requested by import process are missing from repository (`.docx` and design txt names), which can cause alignment drift.
 
 Recommended next development step:
@@ -420,6 +468,24 @@ Train model:
 
 python train.py
 
+Train with a specific reward config path:
+
+python train.py --reward-config reward_configs/baseline.json
+
+Train with a reward config by name:
+
+python train.py --reward-name safe_driver
+
+Train all reward configs sequentially:
+
+python scripts/train_all_rewards.py
+
+Training outputs from `train.py`:
+
+* Periodic checkpoint: `models/<reward_name>/ppo_car_model.zip`
+* Final model on shutdown: `models/<reward_name>/ppo_car_model_final.zip`
+* Logged run data under `data/<reward_name>/run_xxx/`
+
 Play trained model (opens game window):
 
 python play_model.py
@@ -432,7 +498,7 @@ The `play_model.py` script allows visual inspection of a trained model.
 
 How it works:
 
-* Loads the saved PPO model from `ppo_car_model`.
+* Loads the saved PPO model from `ppo_car_model` (repo root).
 * Opens the full game window (non-headless mode).
 * The car drives automatically without keyboard input.
 * Each episode resets automatically when it ends.
@@ -446,7 +512,8 @@ python play_model.py
 
 Requirements:
 
-* A trained model must exist (run `python train.py` first to generate `ppo_car_model.zip`).
+* A trained model must exist at repo root as `ppo_car_model.zip`.
+* Current training stores models under `models/<reward_name>/...`, so copy the model you want to inspect to repo root as `ppo_car_model.zip`, or edit `MODEL_PATH` in `play_model.py`.
 * Stable-Baselines3 must be installed (`pip install -r requirements.txt`).
 
 ---
@@ -464,7 +531,7 @@ Maintenance requirements:
 
 ---
 
-# 8. Summary
+# 9. Summary
 
 Current codebase state:
 
@@ -472,7 +539,8 @@ Current codebase state:
 * Sensor-based driving observations are implemented.
 * Lap/checkpoint system is implemented with sequence-order refinement pending.
 * RL environment and headless training are implemented.
-* PPO training and run data capture are implemented.
+* PPO training is time-based, supports multiple reward configs, and saves separate models/logs per reward config.
+* Run data capture is implemented.
 
 Current priority:
 
